@@ -2,14 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Your App",
-  icons: {
-    icon: "/favicon.ico",
-  },
-};
+
+
 
 export default function HomeRedirect() {
   const router = useRouter();
