@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
-import { collection, onSnapshot, query, orderBy, where, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import {pt} from "date-fns/locale"
+import { pt } from "date-fns/locale";
 
 type Visit = {
   id: string;
   name: string;
-  date: Date;
-  time: string;
+  date?: Date;
+  startDate?: Date;
+  endDate?: Date;
+  time?: string;
 };
 
 export default function CalendarPage() {
@@ -20,36 +22,60 @@ export default function CalendarPage() {
   const [value, setValue] = useState(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
 
-
   useEffect(() => {
-    const q = query(collection(db, "visits"), orderBy("date", "asc"));
+    const q = query(collection(db, "visits"), orderBy("startDate", "asc"));
+
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => {
         const d = doc.data();
+
         return {
           id: doc.id,
           name: d.name,
-          date: d.date.toDate(),
-          time: d.time || "N/A",
+          date: d.date?.toDate?.(), // For single-day visits
+          startDate: d.startDate?.toDate?.(),
+          endDate: d.endDate?.toDate?.(),
+          time: d.time || undefined,
         };
       });
+
       setVisits(data);
     });
 
     return () => unsub();
   }, []);
 
-  const visitsForDate = visits.filter(
-    (v) =>
-      format(v.date, "yyyy-MM-dd") === format(value, "yyyy-MM-dd")
-  );
+  const getVisitRange = (v: Visit) => {
+  const toDateSafe = (d: any) => (typeof d?.toDate === "function" ? d.toDate() : d);
+
+  const startRaw = v.startDate ?? v.date;
+  const endRaw = v.endDate ?? v.date;
+
+  const start = toDateSafe(startRaw);
+  const end = toDateSafe(endRaw);
+
+  if (!start || !end) return null;
+
+  return {
+    startStr: format(start, "yyyy-MM-dd"),
+    endStr: format(end, "yyyy-MM-dd"),
+  };
+};
+
+  const visitsForDate = visits.filter((v) => {
+    const target = format(value, "yyyy-MM-dd");
+    const range = getVisitRange(v);
+    if (!range) return false;
+
+    return target >= range.startStr && target <= range.endStr;
+  });
 
   const deleteVisit = async (id: string) => {
     try {
       await deleteDoc(doc(db, "visits", id));
       alert("Visita apagada!");
     } catch (err) {
-      console.error("Failed to delete visit", err);
+      console.error("Erro ao apagar visita:", err);
     }
   };
 
@@ -75,9 +101,15 @@ export default function CalendarPage() {
           }}
           tileContent={({ date, view }) => {
             if (view === "month") {
-              const hasVisit = visits.some(
-                (v) => format(v.date, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
-              );
+              const target = format(date, "yyyy-MM-dd");
+
+              const hasVisit = visits.some((v) => {
+                const range = getVisitRange(v);
+                if (!range) return false;
+
+                return target >= range.startStr && target <= range.endStr;
+              });
+
               return hasVisit ? (
                 <div className="w-2 h-2 bg-green-500 rounded-full mt-1" />
               ) : null;
@@ -96,21 +128,21 @@ export default function CalendarPage() {
             <ul className="space-y-2">
               {visitsForDate.map((v) => (
                 <li
-                key={v.id}
-                className="border p-3 rounded-md shadow-sm flex justify-between items-center"
-              >
-                <div className="flex-1">
-                  <span className="text-base">
-                    <strong>{v.name}</strong> às {v.time}
-                  </span>
-                </div>
-                <button
-                  onClick={() => deleteVisit(v.id)}
-                  className="text-red-500 hover:text-red-700 text-sm"
+                  key={v.id}
+                  className="border p-3 rounded-md shadow-sm flex justify-between items-center"
                 >
-                  Apagar
-                </button>
-              </li>
+                  <div className="flex-1">
+                    <span className="text-base">
+                      <strong>{v.name}</strong>  {v.time}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => deleteVisit(v.id)}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                  >
+                    Apagar
+                  </button>
+                </li>
               ))}
             </ul>
           )}
