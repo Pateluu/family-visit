@@ -46,7 +46,11 @@ export default function CalendarPage() {
   }, []);
 
   const getVisitRange = (v: Visit) => {
-  const toDateSafe = (d: any) => (typeof d?.toDate === "function" ? d.toDate() : d);
+  const toDateSafe = (d: Date | { toDate: () => Date } | undefined | null): Date | null => {
+    if (!d) return null;
+    return typeof (d as any).toDate === "function" ? (d as { toDate: () => Date }).toDate() : (d as Date);
+  };
+
 
   const startRaw = v.startDate ?? v.date;
   const endRaw = v.endDate ?? v.date;
